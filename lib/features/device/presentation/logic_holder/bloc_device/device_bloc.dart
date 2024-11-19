@@ -24,6 +24,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     on<PostDevice>(_onPostDevice);
     on<PutDevice>(_onPutDevice);
     on<DeleteDevice>(_onDeleteDevice);
+    on<UpdateDeviceWithVoice>(_onUpdateDeviceWithVoice);
   }
 
   Future<void> _onLoadDevices(
@@ -164,6 +165,97 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     } catch (e) {
       emit(DeviceDeleted(
           state: StatusState.failure, message: "Error: ${e.toString()}"));
+    }
+  }
+
+  Future<void> _onUpdateDeviceWithVoice(
+      UpdateDeviceWithVoice event, Emitter<DeviceState> emit) async {
+    emit(const DeviceUpdated(state: StatusState.loading));
+
+    try {
+      final devices = await deviceRepository.getDevices();
+      if (devices == null || devices.isEmpty) {
+        emit(const DeviceUpdated(
+            state: StatusState.failure,
+            message: 'Không tìm thấy thiết bị nào để tải dữ liệu'));
+        return;
+      }
+
+      List<Device> devicesToUpdate = [];
+
+      // Xác định các thiết bị cần cập nhật dựa trên giọng nói
+      if (event.voice.contains('tất cả'.toUpperCase())) {
+        // Bật/tắt tất cả các thiết bị
+        devicesToUpdate = devices;
+      } else if (event.voice.toUpperCase().contains('THIẾT BỊ PHÒNG')) {
+        // Bật/tắt tất cả thiết bị trong phòng cụ thể
+        for (var device in devices) {
+          if (event.voice.contains(device.description.toUpperCase())) {
+            devicesToUpdate.add(device);
+          }
+        }
+      } else {
+        // Bật/tắt thiết bị cụ thể
+        for (var device in devices) {
+          if ((event.voice.contains(device.name.toUpperCase()) &&
+                  event.voice.contains(device.description.toUpperCase())) ||
+              (event.voice.contains(device.name.toUpperCase()) &&
+                  !event.voice.contains(device.description.toUpperCase()))) {
+            devicesToUpdate.add(device);
+          }
+        }
+      }
+
+      // Xác định lệnh bật/tắt
+      String action = '';
+      if (event.voice.contains('bật'.toUpperCase()) ||
+          event.voice.contains('mở'.toUpperCase())) {
+        action = 'on';
+      } else if (event.voice.contains('tắt'.toUpperCase()) ||
+          event.voice.contains('đóng'.toUpperCase())) {
+        action = 'off';
+      }
+
+      if (devicesToUpdate.isNotEmpty && action.isNotEmpty) {
+        final updatedDevices = <Device>[];
+
+        for (var device in devicesToUpdate) {
+          final updatedDevice = device.copyWith(
+            state: action == 'on' ? 'ON' : 'OFF',
+          );
+
+          final success = await deviceRepository.putDevice(updatedDevice);
+
+          if (success) {
+            updatedDevices.add(updatedDevice);
+
+            // Cập nhật trạng thái thiết bị qua WebSocket
+            webSocketService.updateDeviceState(
+              updatedDevice.type,
+              updatedDevice.state,
+              updatedDevice.gate,
+              event.accessKey,
+            );
+          }
+        }
+
+        // Phát sự kiện LoadDeviceByRoomId để tải lại thiết bị trong phòng
+        add(LoadDeviceByRoomId(roomId: updatedDevices.first.roomID));
+
+        emit(const DeviceUpdated(
+            state: StatusState.success, message: 'Cập nhật thành công'));
+      } else {
+        // Nếu không có thiết bị hoặc lệnh không hợp lệ, chỉ tải lại dữ liệu
+        emit(const DeviceUpdated(
+            state: StatusState.failure,
+            message: 'Không tìm thấy thiết bị hoặc lệnh không hợp lệ'));
+
+        // Lấy roomID mặc định hoặc bất kỳ roomID nào để tải lại thiết bị
+        final defaultRoomId = devices.first.roomID;
+        add(LoadDeviceByRoomId(roomId: defaultRoomId));
+      }
+    } catch (e) {
+      emit(DeviceUpdated(state: StatusState.failure, message: e.toString()));
     }
   }
 }

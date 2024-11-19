@@ -2,6 +2,7 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:smarthome_iot/core/common/global_setting/presentation/global_info_bloc/global_info_bloc.dart';
 import 'package:smarthome_iot/firebase_options.dart';
 import 'package:smarthome_iot/l10n/generated/app_localizations.dart';
@@ -16,8 +17,9 @@ import 'features/login/domain/repositories/token_repository.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Khởi tạo Awesome Notifications
   await AwesomeNotifications().initialize(
-    // 'resource://drawable/res_app_icon', // Đường dẫn đến icon PNG trong Android
     null,
     [
       NotificationChannel(
@@ -47,10 +49,15 @@ void main() async {
     AwesomeNotifications().requestPermissionToSendNotifications();
   }
 
+  // Yêu cầu quyền ghi âm
+  await requestMicrophonePermission();
+
+  // Khởi tạo Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  // Khởi tạo các cấu hình khác
   await DotEnvUtil.initDotEnv();
   await di.init();
 
@@ -66,6 +73,19 @@ void main() async {
       : AppRoutes.login;
 
   runApp(MyApp(initialRoute: initialRoute));
+}
+
+// Hàm yêu cầu quyền ghi âm
+Future<void> requestMicrophonePermission() async {
+  PermissionStatus status = await Permission.microphone.request();
+
+  if (status.isGranted) {
+    print('Microphone permission granted');
+  } else if (status.isDenied) {
+    print('Microphone permission denied');
+  } else if (status.isPermanentlyDenied) {
+    openAppSettings();
+  }
 }
 
 class MyApp extends StatefulWidget {

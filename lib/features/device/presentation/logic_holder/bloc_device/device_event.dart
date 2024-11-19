@@ -41,6 +41,19 @@ class UpdateDevice extends DeviceEvent {
   List<Object> get props => [accessKey, device];
 }
 
+class UpdateDeviceWithVoice extends DeviceEvent {
+  final String accessKey;
+  final String voice;
+
+  const UpdateDeviceWithVoice({
+    required this.accessKey,
+    required this.voice,
+  });
+
+  @override
+  List<Object> get props => [accessKey, voice];
+}
+
 class PostDevice extends DeviceEvent {
   final Device device;
 

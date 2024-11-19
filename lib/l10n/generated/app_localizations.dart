@@ -98,7 +98,7 @@ abstract class AppLocalizations {
   /// No description provided for @local_language.
   ///
   /// In en, this message translates to:
-  /// **'English'**
+  /// **'en_US'**
   String get local_language;
 
   /// No description provided for @login.

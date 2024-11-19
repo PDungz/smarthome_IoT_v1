@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -16,14 +17,15 @@ import 'package:smarthome_iot/features/home/presentation/view/device_session_loa
 import 'package:smarthome_iot/features/home/presentation/view/rooms_session_loading.dart';
 import 'package:smarthome_iot/features/home/presentation/view/rooms_session.dart';
 import 'package:smarthome_iot/features/setting/presentation/logic_holder/user_bloc/user_bloc.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../../core/constants/colors/app_colors.dart';
-import '../../../core/constants/components/components_notification/notification_component.dart';
 import '../../../core/enums/status_state.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/services/logger_service.dart';
 import '../../../core/services/websocket_service.dart';
-import '../../device/domain/entities/device.dart';
+import '../../../l10n/generated/app_localizations.dart';
+import '../utils/notification_utils.dart';
 import 'view/weather_session.dart';
 
 class HomeRoutes extends StatefulWidget {
@@ -34,12 +36,20 @@ class HomeRoutes extends StatefulWidget {
 }
 
 class _HomeRoutesState extends State<HomeRoutes> {
+  // Thêm một key để truy cập BuildContext
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late WebSocketService webSocketService;
   late String roomId = ""; // Khởi tạo roomId
   Map<String, dynamic> responseWebSocket = {};
-  late String accessKey = "";
+  String accessKey = "573d49b699cf";
   bool isVoice = true;
   Offset position = Offset(16, 0);
+
+  final SpeechToText _speechToText = SpeechToText();
+  bool _showVoiceCommand = false;
+  bool _speechEnabled = false;
+
+  late String _worksSpoken = "";
 
   double currentGasValue = 0;
   double currentHumidity = 0;
@@ -58,6 +68,7 @@ class _HomeRoutesState extends State<HomeRoutes> {
             screenHeight - 300); // 16px từ trái và cách đáy 100px
       });
     });
+    initSpeech();
   }
 
   void _onRoomSelected(String selectedRoomId) {
@@ -67,15 +78,10 @@ class _HomeRoutesState extends State<HomeRoutes> {
     });
   }
 
-  void _toggleDevice(bool value, Device device) {
-    // Thêm logic để bật/tắt thiết bị
-  }
-
   void _initializeWebSocket(String userId) {
     webSocketService.connect(userId);
     webSocketService.stream.listen((event) {
       final newResponse = jsonDecode(event)['data'];
-
       double newGasValue =
           (newResponse['gas_value'] as num?)?.toDouble() ?? currentGasValue;
       double newHumidity =
@@ -84,57 +90,54 @@ class _HomeRoutesState extends State<HomeRoutes> {
           (newResponse['temperature'] as num?)?.toDouble() ??
               currentTemperature;
 
-      // Define thresholds
-      const double gasThreshold = 450.0;
-      const double humidityThreshold = 30.0;
-      const double temperatureThreshold = 45.0;
+      setState(() {
+        accessKey = newResponse['accessKey'];
+        currentGasValue = newGasValue;
+        currentHumidity = newHumidity;
+        currentTemperature = newTemperature;
+        responseWebSocket = newResponse;
+      });
 
-      // Trigger notifications if thresholds are exceeded
-
-      // Check for differences and update state if needed
-      if (currentGasValue != newGasValue ||
-          currentHumidity != newHumidity ||
-          currentTemperature != newTemperature) {
-        // Gas Level Alert
-        if (newGasValue > gasThreshold) {
-          NotificationComponent.sendBasicNotification(
-            id: 1,
-            title: 'Warning: High Gas Level',
-            body:
-                'Gas level has reached $newGasValue. Please check ventilation!',
-          );
-        }
-
-        // Humidity Alert
-        if (newHumidity < humidityThreshold) {
-          NotificationComponent.sendBasicNotification(
-            id: 2,
-            title: 'Warning: High Humidity',
-            body: 'Humidity level is at $newHumidity%. Consider dehumidifying!',
-          );
-        }
-
-        // Temperature Alert
-        if (newTemperature > temperatureThreshold) {
-          NotificationComponent.sendBasicNotification(
-            id: 3,
-            title: 'Warning: High Temperature',
-            body: 'Temperature is at $newTemperature°C. Please take action!',
-          );
-        }
-        setState(() {
-          accessKey = newResponse['accessKey'];
-          currentGasValue = newGasValue;
-          currentHumidity = newHumidity;
-          currentTemperature = newTemperature;
-          responseWebSocket = newResponse;
-        });
-      }
+      NotificationUtils.checkAndSendNotifications(
+        gasValue: newGasValue,
+        humidity: newHumidity,
+        temperature: newTemperature,
+      );
     });
   }
 
+  void initSpeech() async {
+    _speechEnabled = await _speechToText.initialize();
+
+    setState(() {});
+  }
+
+  // void _startListening() async {
+  //   String languageCode = AppLocalizations.of(context)!.local_language;
+  //   await _speechToText.listen(
+  //     onResult: _onSpeechResult,
+  //     localeId: languageCode,
+  //   );
+  //   setState(() {
+  //     _confidenceLevel = 0;
+  //   });
+  // }
+
+  // void _onSpeechResult(result) {
+  //   setState(() {
+  //     _worksSpoken = "${result.recognizedWords}";
+  //     _confidenceLevel = result.confidence;
+  //   });
+  // }
+
+  // void _stopListening() async {
+  //   await _speechToText.stop();
+  //   setState(() {});
+  // }
+
   @override
   void dispose() {
+    _speechToText.stop();
     super.dispose();
   }
 
@@ -177,6 +180,7 @@ class _HomeRoutesState extends State<HomeRoutes> {
         },
         builder: (context, state) {
           return Scaffold(
+            key: _scaffoldKey, // Thêm key vào đây
             body: LayoutBuilder(builder: (context, Constraints) {
               return Stack(
                 children: [
@@ -203,6 +207,16 @@ class _HomeRoutesState extends State<HomeRoutes> {
                         //     return const SizedBox();
                         //   },
                         // )),
+                        // SliverToBoxAdapter(
+                        //   child: ElevatedButton(
+                        //     onPressed: _speechToText.isNotListening
+                        //         ? _startListening
+                        //         : _stopListening,
+                        //     child: Icon(_speechToText.isNotListening
+                        //         ? Icons.mic_off
+                        //         : Icons.mic),
+                        //   ),
+                        // ),
                         SliverToBoxAdapter(
                           child: BlocBuilder<UserBloc, UserState>(
                             builder: (context, state) {
@@ -326,15 +340,41 @@ class _HomeRoutesState extends State<HomeRoutes> {
                       ],
                     ),
                   ),
-                  // Nút Draggable icon button
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: _showVoiceCommand
+                        ? Container(
+                            margin: EdgeInsets.only(bottom: 100),
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 28, vertical: 12),
+                            decoration: BoxDecoration(
+                              color:
+                                  AppColors.buttonBottomColor.withOpacity(0.8),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _worksSpoken,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: Colors.white,
+                                  ),
+                            ),
+                          )
+                        : SizedBox(),
+                  ),
                   Positioned(
                     left: position.dx,
                     top: position.dy,
                     child: Draggable(
                       feedback: FloatingActionButton(
-                        onPressed: () {},
-                        child:
-                            Icon(isVoice ? Icons.mic : Icons.multitrack_audio),
+                        onPressed: null,
+                        child: Icon(
+                          _speechToText.isNotListening
+                              ? Icons.mic
+                              : Icons.multitrack_audio,
+                        ),
                       ),
                       childWhenDragging: Container(),
                       onDragEnd: (details) {
@@ -354,14 +394,53 @@ class _HomeRoutesState extends State<HomeRoutes> {
                         });
                       },
                       child: FloatingActionButton(
-                        onPressed: () {
-                          printE("Voice Aloooo");
-                          setState(() {
-                            isVoice = !isVoice;
-                          });
+                        onPressed: () async {
+                          String languageCode =
+                              AppLocalizations.of(context)!.local_language;
+
+                          if (_speechToText.isNotListening) {
+                            await _speechToText.listen(
+                              onResult: (result) {
+                                setState(() {
+                                  _worksSpoken = result.recognizedWords;
+                                  double confidence = result.confidence;
+
+                                  if (_worksSpoken.isNotEmpty &&
+                                      confidence * 100 > 80) {
+                                    BlocProvider.of<DeviceBloc>(context).add(
+                                      UpdateDeviceWithVoice(
+                                        accessKey: accessKey,
+                                        voice: _worksSpoken.toUpperCase(),
+                                      ),
+                                    );
+                                    printE(
+                                        "Giọng nói nhận diện được: $_worksSpoken");
+                                    printE("Mức độ tự tin: $confidence");
+
+                                    // Hiển thị lệnh giọng nói
+                                    _showVoiceCommand = true;
+
+                                    // Tự động tắt hiển thị sau 3 giây
+                                    Timer(Duration(seconds: 5), () {
+                                      setState(() {
+                                        _showVoiceCommand = false;
+                                      });
+                                    });
+                                  }
+                                });
+                              },
+                              localeId: languageCode,
+                            );
+                          } else {
+                            await _speechToText.stop();
+                          }
+                          setState(() {});
                         },
-                        child:
-                            Icon(isVoice ? Icons.mic : Icons.multitrack_audio),
+                        child: Icon(
+                          _speechToText.isNotListening
+                              ? Icons.mic
+                              : Icons.multitrack_audio,
+                        ),
                       ),
                     ),
                   ),
