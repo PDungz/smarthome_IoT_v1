@@ -302,7 +302,8 @@ class _HomeRoutesState extends State<HomeRoutes> {
                                       'FAN': AppIcons.FAN,
                                       'SERVO': AppIcons.DOOR,
                                       'KLAXON': AppIcons.KLAXON,
-                                      'AIR_CONDITIONER': AppIcons.FAN
+                                      'AIR_CONDITIONER':
+                                          AppIcons.AIR_CONDITIONER,
                                     };
                                     final device = state.devices[index];
                                     return DeviceSession(

@@ -92,8 +92,12 @@ class _UpdateDeviceRoutesState extends State<UpdateDeviceRoutes> {
                             nameController.text = state.device.name;
                             descriptionTexController.text =
                                 state.device.description;
-                            selectedType = state.device.type;
-                            selectedGate = state.device.gate;
+                            if (selectedType == '') {
+                              selectedType = state.device.type;
+                            }
+                            if (selectedGate == '') {
+                              selectedGate = state.device.gate;
+                            }
                             if (selectedRoomId == '') {
                               selectedRoomId = state.device.roomID;
                             }

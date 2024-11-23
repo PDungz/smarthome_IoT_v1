@@ -22,6 +22,8 @@ class AppIcons {
   static const FAN = "assets/icons/fan-regular.svg";
   static const DOOR = "assets/icons/door-regular.svg";
   static const KLAXON = "assets/icons/campaign_regular.svg";
+  static const AIR_CONDITIONER = "assets/icons/air-conditioner.svg";
+  static const KEY = "assets/icons/key-solid.svg";
 
   static const screwdriver_wrench_solid =
       "assets/icons/screwdriver-wrench-solid.svg";

@@ -61,7 +61,7 @@ class _ViewDeviceRoutesState extends State<ViewDeviceRoutes> {
                       'FAN': AppIcons.FAN,
                       'SERVO': AppIcons.DOOR,
                       'KLAXON': AppIcons.KLAXON,
-                      'AIR_CONDITIONER': AppIcons.FAN
+                      'AIR_CONDITIONER': AppIcons.AIR_CONDITIONER
                     };
                     return ListView.builder(
                       scrollDirection: Axis.vertical,
